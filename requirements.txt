@@ -1,0 +1,8 @@
+streamlit==1.11.1
+pandas==1.4.2
+matplotlib==3.5.2
+scikit-learn==1.1.2
+numpy==1.22.3
+pyodbc==4.0.32
+SQLAlchemy==1.4.41
+PySimpleGUI==4.60.0
