@@ -41,17 +41,6 @@ golf = pd.read_pickle('golf.pkl')
 
 # ----------------------
 
-'''Start Streamlit app'''
-
-st.write("""
-# Testing out the golf data loaded in the tracker
-""")
-st.write('---')
-
-# Loads the Boston House Price Dataset
-# boston = datasets.load_boston()
-# X = pd.DataFrame(boston.data, columns=boston.feature_names)
-# Y = pd.DataFrame(boston.target, columns=["MEDV"])
 
 # Set up data for use in par_diff linear regression
 cols = ['Length', 'Par', 'Approach1', 'Fairway', 'GIR']
@@ -59,15 +48,13 @@ X = golf[cols]
 Y = golf['Par_Diff']
 
 
-
-
 # Sidebar
-# Header of Specify Input Parameters
-st.sidebar.header('Specify Input Parameters')
 
+st.sidebar.header('Specify Input Parameters')
+# Set up sidebar and input parameters
 def user_input_features():
     Length = st.sidebar.slider('Length', float(X.Length.min()), float(X.Length.max()), float(X.Length.mean()))
-    Par = st.sidebar.radio('Par', [3,4,5])
+    Par = st.sidebar.radio('Par', [3,4,5], index=1)
     Approach1 = st.sidebar.slider('Approach1', float(X.Approach1.min()), float(X.Approach1.max()), float(X.Approach1.mean()))
     Fairway = st.sidebar.checkbox('Fairway')
     GIR = st.sidebar.checkbox('GIR')
@@ -84,16 +71,7 @@ def user_input_features():
 
 df = user_input_features()
 
-# Main Panel
-
-# Print specified input parameters
-st.header('Specified Input parameters')
-st.write(df)
-st.write('---')
-
 # Build Regression Model
-# model = LinearRegression()
-# model.fit(X, Y)
 
 # Sike, read in pickled model
 model = pickle.load(open('model.pkl', 'rb'))
@@ -101,19 +79,9 @@ model = pickle.load(open('model.pkl', 'rb'))
 # Apply Model to Make Prediction
 prediction = model.predict(df)
 
-st.header('Prediction of Par_Diff')
-st.write(prediction)
-st.write('---')
-
-# Create scaled model for factor importance
-# model_s = make_pipeline(StandardScaler(), LinearRegression())
-# model_s.fit(X,Y)
-
 # Anotha one, load pickled standardized model
 model_s = pickle.load(open('model_s.pkl', 'rb'))
-
 model_s.score(X,Y)
-
 coefs_s = pd.DataFrame(model_s[1].coef_,
     columns=['Coefficients'],
     index=X.columns
@@ -121,7 +89,6 @@ coefs_s = pd.DataFrame(model_s[1].coef_,
 coefs_s = coefs_s.abs()
 
 # Build Radar plot of features for importance ranking
-
 # Radar function
 def radar_factory(num_vars, frame='circle'):
     """
@@ -212,13 +179,12 @@ def radar_factory(num_vars, frame='circle'):
     register_projection(RadarAxes)
     return theta
 
+# Radar plot layout
 N = len(cols)
 theta = radar_factory(N, frame='polygon')
-
 fig, ax = plt.subplots(figsize=(9, 9), nrows=1, ncols=1,
                         subplot_kw=dict(projection='radar'))
 fig.subplots_adjust(wspace=0.25, hspace=0.20, top=0.85, bottom=0.05)
-
 ax.grid(True)
 ax.set_title('Feature Importance for Par Differential', weight='bold', size='medium', position=(0.5, 1.1),
                 horizontalalignment='center', verticalalignment='center')
@@ -227,11 +193,97 @@ ax.plot(theta, coefs_s, color='r')
 ax.fill(theta, coefs_s, facecolor='r', alpha=0.25, label='_nolegend_')
 ax.set_varlabels(cols)
 
+def approach_bin_setup():
+    # define bins
+    bins = [0, 50, 75, 100, 120, 140, 160, 180, 200, 230, 999]
+    bin_labs = ['0-50', '51-75', '76-100', '101-120', '121-140', '141-160', '161-180', '181-200', '201-230', '230+']
+    golf_tmp = golf.copy()
+    golf_tmp['Approach_Bin'] = pd.cut(x=golf_tmp['Approach1'], bins=bins, labels=bin_labs, include_lowest=True)
+    # Break into GIR and FW vars from non-par5 holes
+    app_binned = golf_tmp.loc[golf['Par'] != 5]
+    app_binned_gir = app_binned.loc[app_binned['GIR']=='1']
+    app_binned_gir_fw = app_binned_gir.loc[app_binned_gir['Fairway']=='1']
+    # Get totals in each bin
+    bin_tots = app_binned.Approach_Bin.value_counts()
+    bin_gir_tots = app_binned_gir.Approach_Bin.value_counts()
+    bin_gir_fw_tots = app_binned_gir_fw.Approach_Bin.value_counts()
+    # Format totals to %
+    bin_pct = (bin_gir_tots / bin_tots) * 100
+    bin_fw_pct = (bin_gir_fw_tots / bin_tots) * 100
+    bin_nonfw = bin_pct - bin_fw_pct
+    # Get bin category value as lists
+    bin_pct_labs = bin_pct.index.categories.to_list()
+    bin_pct_vals = bin_pct.values
+    # Set up bar chart
+    fig2, ax2 = plt.subplots()
+    ax2.bar(bin_pct_labs, bin_fw_pct.values, width=0.4, label='Fairway', color='g')
+    ax2.bar(bin_pct_labs, bin_nonfw.values, width=0.4, bottom=bin_fw_pct.values, label='Non-Fairway', color='b')
 
+    ax2.set_ylabel('Green Pct')
+    ax2.set_xlabel('Yardage Bin')
+    ax2.set_title('% of Greens Hit from Range')
+    ax2.tick_params(axis='x', rotation=45)
+    ax2.legend()
+    return fig2
+
+def round_stats():
+    data = golf.copy()
+    data[['Fairway', 'GIR', 'Hazard']] = data[['Fairway', 'GIR', 'Hazard']].apply(pd.to_numeric)
+    round_stats = data.groupby(['Date', 'Course'])['Par', 'Shots', 'Par_Diff', 'Fairway', 'GIR', 'Putts', 'Hazard', 'Scramble'].sum()
+    return round_stats
+
+def scorecard_stats():
+    data = golf.copy()
+    data[['Fairway', 'GIR', 'Hazard']] = data[['Fairway', 'GIR', 'Hazard']].apply(pd.to_numeric)
+    fw = data['Fairway'].sum()
+    gir = data['GIR'].sum()
+    p = data['Putts'].mean()
+    prox = data['Hole_Prox'].mean()
+    return [fw, gir, p, prox]
+
+'''BEGIN STREAMLIT APP'''
+
+
+# Title
+st.write("""
+# Personal golf stats for Eric
+""")
+st.write('---')
+
+# Main Panel
+
+# Print specified input parameters
+st.header('Score Prediction Based on Specified Input Parameters')
+col1, col2 = st.columns(2)
+col1.write(df)
+col2.metric(label='Predicted Score', value=round(prediction[0], 4))
+st.write('---')
+
+# Feature importance radar plot display
 st.header('Feature Importance')
 plt.title('Feature importance based on scaled regression')
 st.pyplot(fig)
 st.write('---')
 
+# Stats by round
+st.header('Full round numbers')
+round_table = round_stats()
+st.write(round_table)
+st.write('---')
 
+# Basic stats from the card
+st.header('Basic hole stats')
+bs1, bs2, bs3, bs4 = st.columns(4)
+bs = scorecard_stats()
+bs1.metric(label=r'% Fairways hit', value=(round((bs[0]/len(golf))*100, 3)))
+bs2.metric(label=r'% Greens in Reg', value=round((bs[1]/len(golf))*100, 3))
+bs3.metric(label='Avg Putts', value=round(bs[2], 3))
+bs4.metric(label='Avg 1st Putt Dist', value=round(bs[3], 3))
+st.write('---')
+
+# Approach performance binned bar chart
+st.header('Approach performance by yardage')
+test = approach_bin_setup()
+st.write(test)
+st.write('---')
 
