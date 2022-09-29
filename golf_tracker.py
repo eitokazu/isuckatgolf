@@ -265,12 +265,6 @@ plt.title('Feature importance based on scaled regression')
 st.pyplot(fig)
 st.write('---')
 
-# Stats by round
-st.header('Full round numbers')
-round_table = round_stats()
-st.write(round_table)
-st.write('---')
-
 # Basic stats from the card
 st.header('Basic hole stats')
 bs1, bs2, bs3, bs4 = st.columns(4)
@@ -279,6 +273,12 @@ bs1.metric(label=r'% Fairways hit', value=(round((bs[0]/len(golf))*100, 3)))
 bs2.metric(label=r'% Greens in Reg', value=round((bs[1]/len(golf))*100, 3))
 bs3.metric(label='Avg Putts', value=round(bs[2], 3))
 bs4.metric(label='Avg 1st Putt Dist', value=round(bs[3], 3))
+st.write('---')
+
+# Stats by round
+st.header('Full round numbers')
+round_table = round_stats()
+st.write(round_table)
 st.write('---')
 
 # Approach performance binned bar chart
